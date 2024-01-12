@@ -15,7 +15,10 @@ Please set JAVA_HOME to the location of your JDK or add javac to the path"
 Get-ChildItem -Directory | Foreach-Object {
     Push-Location $_
     Remove-Item -Force -Path "*.class"
+    Write-Host "Compiling .java files in directory: $($_.FullName)"
     $items = Get-ChildItem -Path '*.java'
-    if ($items) { & $javac -g @items }
+    if ($items) { 
+        & $javac -g -Xlint:deprecation -Xlint:unchecked @items 2>&1 | Write-Host 
+    }
     Pop-Location
 }

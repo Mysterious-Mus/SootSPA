@@ -16,6 +16,8 @@ If you have some prior knowledge about static program analysis I suggest you lea
 ## Setup
 In short, use Java 8 and run `./gradlew build`. For more information and Docker setup, follow this [link](docs/Setup/). 
 
+You can specify `JAVA_HOME` in `gradle.properties`.
+
 ## Chapters
 ### 1: Get your hands dirty
 

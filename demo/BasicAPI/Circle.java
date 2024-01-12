@@ -12,10 +12,22 @@ public class Circle {
         this.radius = radius;
     }
 
+    public static void UBD() {
+        int a = 5, b;
+        if(a < 6) {
+            b = 7;
+        }
+        else {
+            b = 8;
+        }
+        System.out.println(b);
+    }
+
     public static void main(String[] args){
-        Circle circle = new Circle(5);
-        int actualArea = circle.area(false); // should be 78
-        int integerArea = circle.area(true); // should be 81
+        // Circle circle = new Circle(5);
+        // int actualArea = circle.area(false); // should be 78
+        // int integerArea = circle.area(true); // should be 81
+        UBD();
     }
 
     // A.K.A Gauss Circle Problem

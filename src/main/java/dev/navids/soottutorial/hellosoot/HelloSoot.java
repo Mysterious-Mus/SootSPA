@@ -10,8 +10,10 @@ import soot.jimple.internal.JIfStmt;
 import soot.options.Options;
 import soot.toolkits.graph.ClassicCompleteUnitGraph;
 import soot.toolkits.graph.UnitGraph;
+import soot.jimple.AssignStmt;
+import soot.jimple.BinopExpr;
 
-import java.io.File;
+import java.io.*;
 
 public class HelloSoot {
 
@@ -20,6 +22,20 @@ public class HelloSoot {
     public static String methodName = "printFizzBuzz";
 
     public static void setupSoot() {
+        try {
+            ProcessBuilder builder = new ProcessBuilder("powershell.exe", "demo\\compile.ps1");
+            builder.redirectErrorStream(true);
+            Process p = builder.start();
+            p.getOutputStream().close();
+            String line;
+            BufferedReader stdout = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            while ((line = stdout.readLine()) != null) {
+                System.out.println(line);
+            }
+            stdout.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         G.reset();
         Options.v().set_prepend_classpath(true);
         Options.v().set_allow_phantom_refs(true);
@@ -50,8 +66,24 @@ public class HelloSoot {
         System.out.println("--------------");
         System.out.println("Units:");
         int c = 1;
+        UnitGraph ug = new ClassicCompleteUnitGraph(body);
         for (Unit u : body.getUnits()) {
             System.out.println("(" + c + ") " + u.toString());
+            // also print the predecessors of the unit
+            System.out.println("    Preds: " + ug.getPredsOf(u));
+            // if the unit is an assignment statement, print the left and right operands
+            if (u instanceof AssignStmt) {
+                AssignStmt assignStmt = (AssignStmt) u;
+                System.out.println("    Assigning to: " + assignStmt.getLeftOp());
+                Value rhs = assignStmt.getRightOp();
+                System.out.println("    Evaluating: " + rhs);
+                // if the right-hand side is a binary operation, print the operands
+                if (rhs instanceof BinopExpr) {
+                    BinopExpr binop = (BinopExpr) rhs;
+                    System.out.println("    Operand 1: " + binop.getOp1());
+                    System.out.println("    Operand 2: " + binop.getOp2());
+                }
+            }
             c++;
         }
         System.out.println("--------------");
@@ -68,7 +100,6 @@ public class HelloSoot {
         if (args.length > 0 && args[0].equals("draw"))
             drawGraph = true;
         if (drawGraph) {
-            UnitGraph ug = new ClassicCompleteUnitGraph(sm.getActiveBody());
             Visualizer.v().addUnitGraph(ug);
             Visualizer.v().draw();
         }
