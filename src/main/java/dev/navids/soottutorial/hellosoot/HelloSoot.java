@@ -3,7 +3,6 @@
  */
 package dev.navids.soottutorial.hellosoot;
 
-import dev.navids.soottutorial.visual.Visualizer;
 import soot.*;
 import soot.jimple.JimpleBody;
 import soot.jimple.internal.JIfStmt;
@@ -96,12 +95,5 @@ public class HelloSoot {
         }
 
         // Draw the control-flow graph of the method if 'draw' is provided in arguments
-        boolean drawGraph = false;
-        if (args.length > 0 && args[0].equals("draw"))
-            drawGraph = true;
-        if (drawGraph) {
-            Visualizer.v().addUnitGraph(ug);
-            Visualizer.v().draw();
-        }
     }
 }
