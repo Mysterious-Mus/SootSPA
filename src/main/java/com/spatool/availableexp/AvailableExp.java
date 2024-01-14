@@ -13,11 +13,11 @@ import soot.jimple.BinopExpr;
 import java.io.*;
 import java.util.*;
 
+import com.spatool.utils.ArgParse;
+
 public class AvailableExp {
 
-    public static String sourceDirectory = System.getProperty("user.dir") + File.separator + "demo" + File.separator + "HelloSoot";
-    public static String clsName = "FizzBuzz";
-    public static String methodName = "moreAvaliable";
+    public static String necessaryArgs[] = {"cp", "c", "m"};
 
     private static class AvailableExpFact implements Iterable<BinopExpr>{
         private Set<BinopExpr> availableExps;
@@ -225,21 +225,31 @@ public class AvailableExp {
         G.reset();
         Options.v().set_prepend_classpath(true);
         Options.v().set_allow_phantom_refs(true);
-        Options.v().set_soot_classpath(sourceDirectory);
+        Options.v().set_soot_classpath(argMap.get("cp"));
         Options.v().set_keep_line_number(true);
         Options.v().set_keep_offset(true);
-        SootClass sc = Scene.v().loadClassAndSupport(clsName);
+        SootClass sc = Scene.v().loadClassAndSupport(argMap.get("c"));
         sc.setApplicationClass();
         Scene.v().loadNecessaryClasses();
 
     }
 
+    private static Map<String, String> argMap;
+
     public static void main(String[] args) {
+        // print args
+        System.out.println("args: " + Arrays.toString(args));
+
+        argMap = ArgParse.parse(args);
+        if (!ArgParse.check(argMap, necessaryArgs)) {
+            return;
+        }
+
         setupSoot();
 
         // Retrieve printFizzBuzz's body
-        SootClass mainClass = Scene.v().getSootClass(clsName);
-        SootMethod sm = mainClass.getMethodByName(methodName);
+        SootClass mainClass = Scene.v().getSootClass(argMap.get("c"));
+        SootMethod sm = mainClass.getMethodByName(argMap.get("m"));
         JimpleBody body = (JimpleBody) sm.retrieveActiveBody();
 
         // Print some information about printFizzBuzz

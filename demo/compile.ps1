@@ -11,6 +11,8 @@ if (!(Get-Command $javac -ErrorAction SilentlyContinue)) {
 Please set JAVA_HOME to the location of your JDK or add javac to the path"
 }
 
+Set-Location demo
+
 # Compile all .java files in subdirectories
 Get-ChildItem -Directory | Foreach-Object {
     Push-Location $_
