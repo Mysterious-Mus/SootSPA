@@ -22,6 +22,15 @@ public class FizzBuzz {
         }
     }
 
+    public void available() {
+        int S = 0, a = 6, b = 7, s;
+        S = a * b;
+        while(S < 300) {
+            s = a * b;
+            S += s;
+        }
+    }
+
     public void fizzBuzz(int n){
         for (int i=1; i<=n; i++)
             printFizzBuzz(i);

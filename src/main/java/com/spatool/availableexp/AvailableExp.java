@@ -32,7 +32,12 @@ public class AvailableExp {
         }
 
         public boolean contains(BinopExpr binop) {
-            return availableExps.contains(binop);
+            for (BinopExpr myop : availableExps) {
+                if (myop.equivTo(binop)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /* set the receiving obj to the join of it and another fact */
@@ -44,10 +49,6 @@ public class AvailableExp {
                 }
             }
             availableExps = newAvailableExps;
-        }
-
-        public void remove(BinopExpr binop) {
-            availableExps.remove(binop);
         }
 
         public void add(BinopExpr binop) {
@@ -106,6 +107,8 @@ public class AvailableExp {
     private static class AvailableExpAnalysis {
         private AvailableExpResult result;
         private SootMethod method;
+        private JimpleBody body;
+        private UnitGraph controlFlowGraph;
 
         private class WorkList {
             private Queue<Unit> workList;
@@ -132,17 +135,31 @@ public class AvailableExp {
         public AvailableExpAnalysis(SootMethod method) {
             result = new AvailableExpResult();
             this.method = method;
+            this.body = (JimpleBody) method.retrieveActiveBody();
+            this.controlFlowGraph = new ClassicCompleteUnitGraph(body);
         }
 
         public AvailableExpResult getResult() {
             return result;
         }
 
+        public AvailableExpFact getInFact(Unit target) {
+            AvailableExpFact inFact = new AvailableExpFact();
+            boolean firstPred = true;
+            for (Unit v : controlFlowGraph.getPredsOf(target)) {
+                if (firstPred) {
+                    inFact = result.getOutFact(v).clone();
+                    firstPred = false;
+                } else {
+                    inFact.join(result.getOutFact(v));
+                }
+            }
+            return inFact;
+        }
+
         public void doAnalysis() {
             // Initialize the worklist
             workList = new WorkList();
-            JimpleBody body = (JimpleBody) method.retrieveActiveBody();
-            UnitGraph controlFlowGraph = new ClassicCompleteUnitGraph(body);
             // Initialize the result
             for (Unit u : body.getUnits()) {
                 result.unitToFact.put(u, new AvailableExpFact());
@@ -155,16 +172,7 @@ public class AvailableExp {
             while (!workList.isEmpty()) {
                 Unit u = workList.remove();
                 // Get the in fact of the unit
-                AvailableExpFact inFact = new AvailableExpFact();
-                boolean firstPred = true;
-                for (Unit v : controlFlowGraph.getPredsOf(u)) {
-                    if (firstPred) {
-                        inFact = result.getOutFact(v).clone();
-                        firstPred = false;
-                    } else {
-                        inFact.join(result.getOutFact(v));
-                    }
-                }
+                AvailableExpFact inFact = getInFact(u);
                 // in fact refers to all the new available expressions ready to add to the out fact
                 // Get the out fact of the unit
                 // first kill changed expressions
@@ -208,15 +216,36 @@ public class AvailableExp {
             System.out.println("Available Expressions Analysis Result for " + method.getSignature() + ":");
             JimpleBody body = (JimpleBody) method.retrieveActiveBody();
             UnitGraph ug = new ClassicCompleteUnitGraph(body);
-            int unitIdx = 1;
             for (Unit u : body.getUnits()) {
                 System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
                 // System.out.println("(" + unitIdx + ") " + u.toString() + " at line " + u.getJavaSourceStartLineNumber());
                 // also print the predecessors of the unit
                 System.out.println("    Preds: " + ug.getPredsOf(u));
+                System.out.println("    succs: " + ug.getSuccsOf(u));
                 // print available exps
                 System.out.println("    Available Expressions: " + result.getOutFact(u));
-                unitIdx++;
+            }
+        }
+
+        /* report all the redundant computations  */
+        public void reportWarnings() {
+            System.out.println("------------------------");
+            System.out.println("Units you may optimize in " + method.getSignature() + ":");
+            JimpleBody body = (JimpleBody) method.retrieveActiveBody();
+            UnitGraph ug = new ClassicCompleteUnitGraph(body);
+            for (Unit u : body.getUnits()) {
+                // if an bin expr used in this unit is available in its in fact
+                if (u instanceof AssignStmt) {
+                    AssignStmt assignStmt = (AssignStmt) u;
+                    Value rhs = assignStmt.getRightOp();
+                    if (rhs instanceof BinopExpr) {
+                        BinopExpr binop = (BinopExpr) rhs;
+                        AvailableExpFact inFact = getInFact(u);
+                        if (inFact.contains(binop)) {
+                            System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
+                        }
+                    }
+                }
             }
         }
     }
@@ -296,5 +325,6 @@ public class AvailableExp {
         AvailableExpAnalysis analysis = new AvailableExpAnalysis(sm);
         analysis.doAnalysis();
         analysis.reportResult();
+        analysis.reportWarnings();
     }
 }
