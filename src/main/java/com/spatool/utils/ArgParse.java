@@ -30,9 +30,6 @@ public class ArgParse {
                 allPresent = false;
             }
         }
-        if (!allPresent) {
-            System.err.println("Usage: java -jar <jarfile> " + String.join(" ", requiredArgs));
-        }
         return allPresent;
     }
 }

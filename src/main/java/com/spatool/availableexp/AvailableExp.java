@@ -94,7 +94,7 @@ public class AvailableExp {
         }
 
         /* get the out fact of the given unit, report an empty one if the unit is not recorded yet */
-        public AvailableExpFact getOutFact(Unit u) {
+        public AvailableExpFact getFact(Unit u) {
             AvailableExpFact fact = unitToFact.get(u);
             if (fact == null) {
                 fact = new AvailableExpFact();
@@ -102,10 +102,14 @@ public class AvailableExp {
             }
             return fact;
         }
+
+        public void put(Unit u, AvailableExpFact fact) {
+            unitToFact.put(u, fact);
+        }
     }
 
     private static class AvailableExpAnalysis {
-        private AvailableExpResult result;
+        private AvailableExpResult outFacts;
         private SootMethod method;
         private JimpleBody body;
         private UnitGraph controlFlowGraph;
@@ -133,26 +137,34 @@ public class AvailableExp {
         private WorkList workList;
 
         public AvailableExpAnalysis(SootMethod method) {
-            result = new AvailableExpResult();
+            outFacts = new AvailableExpResult();
             this.method = method;
             this.body = (JimpleBody) method.retrieveActiveBody();
             this.controlFlowGraph = new ClassicCompleteUnitGraph(body);
         }
 
-        public AvailableExpResult getResult() {
-            return result;
+        public AvailableExpResult getOutFacts() {
+            return outFacts;
         }
 
-        public AvailableExpFact getInFact(Unit target) {
+        public AvailableExpFact getInFactJoin(Unit target) {
             AvailableExpFact inFact = new AvailableExpFact();
             boolean firstPred = true;
             for (Unit v : controlFlowGraph.getPredsOf(target)) {
                 if (firstPred) {
-                    inFact = result.getOutFact(v).clone();
+                    inFact = outFacts.getFact(v).clone();
                     firstPred = false;
                 } else {
-                    inFact.join(result.getOutFact(v));
+                    inFact.join(outFacts.getFact(v));
                 }
+            }
+            return inFact;
+        }
+
+        public AvailableExpFact getInFactMeet(Unit target) {
+            AvailableExpFact inFact = new AvailableExpFact();
+            for (Unit v : controlFlowGraph.getPredsOf(target)) {
+                inFact.meetInto(outFacts.getFact(v));
             }
             return inFact;
         }
@@ -162,7 +174,7 @@ public class AvailableExp {
             workList = new WorkList();
             // Initialize the result
             for (Unit u : body.getUnits()) {
-                result.unitToFact.put(u, new AvailableExpFact());
+                outFacts.put(u, new AvailableExpFact());
             }
             // Add all units to the worklist
             for (Unit u : body.getUnits()) {
@@ -172,7 +184,7 @@ public class AvailableExp {
             while (!workList.isEmpty()) {
                 Unit u = workList.remove();
                 // Get the in fact of the unit
-                AvailableExpFact inFact = getInFact(u);
+                AvailableExpFact inFact = getInFactJoin(u);
                 // in fact refers to all the new available expressions ready to add to the out fact
                 // Get the out fact of the unit
                 // first kill changed expressions
@@ -188,7 +200,6 @@ public class AvailableExp {
                             iter.remove();
                         }
                     }
-
                 }
                 // since IR won't assign to a variable used, we can handle generated expressions after kill
                 if (u instanceof AssignStmt) {
@@ -201,12 +212,46 @@ public class AvailableExp {
                     }
                 }
                 // merge the in fact into the out fact
-                AvailableExpFact outFact = result.getOutFact(u);
+                AvailableExpFact outFact = outFacts.getFact(u);
                 if (outFact.meetInto(inFact)) {
                     // if the out fact changed, add all successors to the worklist
                     for (Unit v : controlFlowGraph.getSuccsOf(u)) {
                         workList.add(v);
                     }
+                }
+            }
+        }
+
+        public void doMayIter(int Niter) {
+            for (int iter = 0; iter < Niter; iter++) {
+                System.out.println("---------------------------------------");
+                System.out.println("may iter " + iter);
+                AvailableExpResult inFacts = new AvailableExpResult();
+                // figure out all the in facts
+                for (Unit u : body.getUnits()) {
+                    AvailableExpFact inFact = getInFactMeet(u);
+                    // we don't have to do gen anymore, we only have to kill
+                    if (u instanceof AssignStmt) {
+                        AssignStmt assignStmt = (AssignStmt) u;
+                        // the variable assigned to
+                        Value lhs = assignStmt.getLeftOp();
+                        // see if any expression uses the variable in inFact, kill it if so
+                        Iterator<BinopExpr> iterIn = inFact.iterator();
+                        while (iterIn.hasNext()) {
+                            BinopExpr binop = iterIn.next();
+                            if (binop.getOp1().equivTo(lhs) || binop.getOp2().equivTo(lhs)) {
+                                iterIn.remove();
+                            }
+                        }
+                    }
+                    inFacts.put(u, inFact);
+                }
+                // meet in facts into out facts
+                for (Unit u : body.getUnits()) {
+                    System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
+                    System.out.println("    Meeting in: " + inFacts.getFact(u));
+                    AvailableExpFact outFact = outFacts.getFact(u);
+                    outFact.meetInto(inFacts.getFact(u));
                 }
             }
         }
@@ -223,7 +268,7 @@ public class AvailableExp {
                 System.out.println("    Preds: " + ug.getPredsOf(u));
                 System.out.println("    succs: " + ug.getSuccsOf(u));
                 // print available exps
-                System.out.println("    Available Expressions: " + result.getOutFact(u));
+                System.out.println("    Available Expressions: " + outFacts.getFact(u));
             }
         }
 
@@ -240,7 +285,7 @@ public class AvailableExp {
                     Value rhs = assignStmt.getRightOp();
                     if (rhs instanceof BinopExpr) {
                         BinopExpr binop = (BinopExpr) rhs;
-                        AvailableExpFact inFact = getInFact(u);
+                        AvailableExpFact inFact = getInFactJoin(u);
                         if (inFact.contains(binop)) {
                             System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
                         }
@@ -313,17 +358,12 @@ public class AvailableExp {
             }
             c++;
         }
-        System.out.println("--------------");
-
-        // Print statements that have branch conditions
-        System.out.println("Branch Statements:");
-        for (Unit u : body.getUnits()) {
-            if (u instanceof JIfStmt)
-                System.out.println(u.toString());
-        }
 
         AvailableExpAnalysis analysis = new AvailableExpAnalysis(sm);
         analysis.doAnalysis();
+        if (argMap.get("may_iter") != null) {
+            analysis.doMayIter(Integer.parseInt(argMap.get("may_iter")));
+        }
         analysis.reportResult();
         analysis.reportWarnings();
     }
