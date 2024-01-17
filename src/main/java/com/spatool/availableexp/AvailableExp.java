@@ -10,7 +10,6 @@ import soot.toolkits.graph.UnitGraph;
 import soot.jimple.AssignStmt;
 import soot.jimple.BinopExpr;
 
-import java.io.*;
 import java.util.*;
 
 import com.spatool.utils.ArgParse;
@@ -18,6 +17,7 @@ import com.spatool.utils.ArgParse;
 public class AvailableExp {
 
     public static String necessaryArgs[] = {"cp", "c", "m"};
+    public static String optionalArgs[] = {"may_iter", "enhanced_may_iter"};
 
     private static class AvailableExpFact implements Iterable<BinopExpr>{
         private Set<BinopExpr> availableExps;
@@ -55,7 +55,8 @@ public class AvailableExp {
             availableExps.add(binop);
         }
 
-        /* meet another fact into this fact, return true if changed */
+        /**
+         *  meet another fact into this fact, return true if changed */
         public boolean meetInto(AvailableExpFact another) {
             boolean changed = false;
             for (BinopExpr binop : another) {
@@ -132,6 +133,10 @@ public class AvailableExp {
             public boolean isEmpty() {
                 return workList.isEmpty();
             }
+
+            public int size() {
+                return workList.size();
+            }
         }
 
         private WorkList workList;
@@ -141,6 +146,15 @@ public class AvailableExp {
             this.method = method;
             this.body = (JimpleBody) method.retrieveActiveBody();
             this.controlFlowGraph = new ClassicCompleteUnitGraph(body);
+            this.workList = new WorkList();
+            // Initialize the result
+            for (Unit u : body.getUnits()) {
+                outFacts.put(u, new AvailableExpFact());
+            }
+            // Add all units to the worklist
+            for (Unit u : body.getUnits()) {
+                workList.add(u);
+            }
         }
 
         public AvailableExpResult getOutFacts() {
@@ -169,17 +183,11 @@ public class AvailableExp {
             return inFact;
         }
 
+        /**
+         * finish all the remaining worklist
+         * can be called both from outside and from may iter
+         */
         public void doAnalysis() {
-            // Initialize the worklist
-            workList = new WorkList();
-            // Initialize the result
-            for (Unit u : body.getUnits()) {
-                outFacts.put(u, new AvailableExpFact());
-            }
-            // Add all units to the worklist
-            for (Unit u : body.getUnits()) {
-                workList.add(u);
-            }
             // Do the analysis
             while (!workList.isEmpty()) {
                 Unit u = workList.remove();
@@ -222,7 +230,7 @@ public class AvailableExp {
             }
         }
 
-        public void doMayIter(int Niter) {
+        public void doMayIter(int Niter, boolean enhanced) {
             for (int iter = 0; iter < Niter; iter++) {
                 System.out.println("---------------------------------------");
                 System.out.println("may iter " + iter);
@@ -251,7 +259,16 @@ public class AvailableExp {
                     System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
                     System.out.println("    Meeting in: " + inFacts.getFact(u));
                     AvailableExpFact outFact = outFacts.getFact(u);
-                    outFact.meetInto(inFacts.getFact(u));
+                    boolean changed = outFact.meetInto(inFacts.getFact(u));
+                    if (changed && enhanced) {
+                        // if the out fact changed, add all successors to the worklist
+                        for (Unit v : controlFlowGraph.getSuccsOf(u)) {
+                            workList.add(v);
+                        }
+                    }
+                }
+                if (enhanced) {
+                    doAnalysis();
                 }
             }
         }
@@ -362,7 +379,7 @@ public class AvailableExp {
         AvailableExpAnalysis analysis = new AvailableExpAnalysis(sm);
         analysis.doAnalysis();
         if (argMap.get("may_iter") != null) {
-            analysis.doMayIter(Integer.parseInt(argMap.get("may_iter")));
+            analysis.doMayIter(Integer.parseInt(argMap.get("may_iter")), argMap.get("enhanced_may_iter") != null);
         }
         analysis.reportResult();
         analysis.reportWarnings();
