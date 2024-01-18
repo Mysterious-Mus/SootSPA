@@ -2,17 +2,18 @@ package com.spatool.availableexp;
 
 import soot.*;
 import soot.jimple.JimpleBody;
-import soot.jimple.infoflow.data.SootMethodAndClass;
-import soot.jimple.internal.JIfStmt;
 import soot.options.Options;
 import soot.toolkits.graph.ClassicCompleteUnitGraph;
 import soot.toolkits.graph.UnitGraph;
 import soot.jimple.AssignStmt;
 import soot.jimple.BinopExpr;
 
+import java.io.File;
 import java.util.*;
 
 import com.spatool.utils.ArgParse;
+import com.spatool.utils.SourceCode;
+import com.spatool.utils.WorkList;
 
 public class AvailableExp {
 
@@ -114,39 +115,17 @@ public class AvailableExp {
         private SootMethod method;
         private JimpleBody body;
         private UnitGraph controlFlowGraph;
+        private Map<String, String> args;
 
-        private class WorkList {
-            private Queue<Unit> workList;
+        private WorkList<Unit> workList;
 
-            public WorkList() {
-                workList = new LinkedList<Unit>();
-            }
-
-            public void add(Unit u) {
-                workList.add(u);
-            }
-
-            public Unit remove() {
-                return workList.remove();
-            }
-
-            public boolean isEmpty() {
-                return workList.isEmpty();
-            }
-
-            public int size() {
-                return workList.size();
-            }
-        }
-
-        private WorkList workList;
-
-        public AvailableExpAnalysis(SootMethod method) {
+        public AvailableExpAnalysis(SootMethod method, Map<String, String> args) {
+            this.args = args;
             outFacts = new AvailableExpResult();
             this.method = method;
             this.body = (JimpleBody) method.retrieveActiveBody();
             this.controlFlowGraph = new ClassicCompleteUnitGraph(body);
-            this.workList = new WorkList();
+            this.workList = new WorkList<Unit>();
             // Initialize the result
             for (Unit u : body.getUnits()) {
                 outFacts.put(u, new AvailableExpFact());
@@ -279,7 +258,7 @@ public class AvailableExp {
             JimpleBody body = (JimpleBody) method.retrieveActiveBody();
             UnitGraph ug = new ClassicCompleteUnitGraph(body);
             for (Unit u : body.getUnits()) {
-                System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
+                System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u);
                 // System.out.println("(" + unitIdx + ") " + u.toString() + " at line " + u.getJavaSourceStartLineNumber());
                 // also print the predecessors of the unit
                 System.out.println("    Preds: " + ug.getPredsOf(u));
@@ -304,11 +283,21 @@ public class AvailableExp {
                         BinopExpr binop = (BinopExpr) rhs;
                         AvailableExpFact inFact = getInFactJoin(u);
                         if (inFact.contains(binop)) {
-                            System.out.println("line " + u.getJavaSourceStartLineNumber() + ": " + u.toString());
+                            System.out.println(args.get("cp") + File.separator + args.get("c") + ".java:" + u.getJavaSourceStartLineNumber() + " " +
+                                SourceCode.get(args.get("cp"), args.get("c"), u.getJavaSourceStartLineNumber()));
                         }
                     }
                 }
             }
+        }
+
+        public void main() {
+            doAnalysis();
+            if (args.get("may_iter") != null) {
+                doMayIter(Integer.parseInt(args.get("may_iter")), args.get("enhanced_may_iter") != null);
+            }
+            reportResult();
+            reportWarnings();
         }
     }
 
@@ -332,7 +321,7 @@ public class AvailableExp {
         System.out.println("args: " + Arrays.toString(args));
 
         argMap = ArgParse.parse(args);
-        if (!ArgParse.check(argMap, necessaryArgs)) {
+        if (!ArgParse.check(argMap, necessaryArgs, optionalArgs)) {
             return;
         }
 
@@ -340,48 +329,43 @@ public class AvailableExp {
 
         // Retrieve printFizzBuzz's body
         SootClass mainClass = Scene.v().getSootClass(argMap.get("c"));
-        SootMethod sm = mainClass.getMethodByName(argMap.get("m"));
-        JimpleBody body = (JimpleBody) sm.retrieveActiveBody();
+        SootMethod sootMethod = mainClass.getMethodByName(argMap.get("m"));
+        JimpleBody methodBody = (JimpleBody) sootMethod.retrieveActiveBody();
 
         // Print some information about printFizzBuzz
-        System.out.println("Method Signature: " + sm.getSignature());
+        System.out.println("Method Signature: " + sootMethod.getSignature());
         System.out.println("--------------");
         System.out.println("Argument(s):");
-        for (Local l : body.getParameterLocals()) {
+        for (Local l : methodBody.getParameterLocals()) {
             System.out.println(l.getName() + " : " + l.getType());
         }
         System.out.println("--------------");
-        System.out.println("This: " + body.getThisLocal());
+        System.out.println("This: " + methodBody.getThisLocal());
         System.out.println("--------------");
         System.out.println("Units:");
         int c = 1;
-        UnitGraph ug = new ClassicCompleteUnitGraph(body);
-        for (Unit u : body.getUnits()) {
+        UnitGraph ug = new ClassicCompleteUnitGraph(methodBody);
+        for (Unit u : methodBody.getUnits()) {
             System.out.println("(" + c + ") " + u.toString());
-            // also print the predecessors of the unit
-            System.out.println("    Preds: " + ug.getPredsOf(u));
-            // if the unit is an assignment statement, print the left and right operands
-            if (u instanceof AssignStmt) {
-                AssignStmt assignStmt = (AssignStmt) u;
-                System.out.println("    Assigning to: " + assignStmt.getLeftOp());
-                Value rhs = assignStmt.getRightOp();
-                System.out.println("    Evaluating: " + rhs);
-                // if the right-hand side is a binary operation, print the operands
-                if (rhs instanceof BinopExpr) {
-                    BinopExpr binop = (BinopExpr) rhs;
-                    System.out.println("    Operand 1: " + binop.getOp1());
-                    System.out.println("    Operand 2: " + binop.getOp2());
-                }
-            }
+            // // also print the predecessors of the unit
+            // System.out.println("    Preds: " + ug.getPredsOf(u));
+            // // if the unit is an assignment statement, print the left and right operands
+            // if (u instanceof AssignStmt) {
+            //     AssignStmt assignStmt = (AssignStmt) u;
+            //     System.out.println("    Assigning to: " + assignStmt.getLeftOp());
+            //     Value rhs = assignStmt.getRightOp();
+            //     System.out.println("    Evaluating: " + rhs);
+            //     // if the right-hand side is a binary operation, print the operands
+            //     if (rhs instanceof BinopExpr) {
+            //         BinopExpr binop = (BinopExpr) rhs;
+            //         System.out.println("    Operand 1: " + binop.getOp1());
+            //         System.out.println("    Operand 2: " + binop.getOp2());
+            //     }
+            // }
             c++;
         }
 
-        AvailableExpAnalysis analysis = new AvailableExpAnalysis(sm);
-        analysis.doAnalysis();
-        if (argMap.get("may_iter") != null) {
-            analysis.doMayIter(Integer.parseInt(argMap.get("may_iter")), argMap.get("enhanced_may_iter") != null);
-        }
-        analysis.reportResult();
-        analysis.reportWarnings();
+        AvailableExpAnalysis analysis = new AvailableExpAnalysis(sootMethod, argMap);
+        analysis.main();
     }
 }

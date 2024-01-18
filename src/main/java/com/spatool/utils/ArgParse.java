@@ -22,14 +22,20 @@ public class ArgParse {
     }
 
     /* check the availablity of required args, return true if all present, false otherwise and report usage */
-    public static boolean check(Map<String, String> map, String[] requiredArgs) {
-        boolean allPresent = true;
+    public static boolean check(Map<String, String> map, String[] requiredArgs, String[] optionalArgs) {
+        boolean success = true;
         for (String arg : requiredArgs) {
             if (!map.containsKey(arg)) {
                 System.err.println("Missing required argument: " + arg);
-                allPresent = false;
+                success = false;
             }
         }
-        return allPresent;
+        for (String arg : map.keySet()) {
+            if (!Arrays.asList(requiredArgs).contains(arg) && !Arrays.asList(optionalArgs).contains(arg)) {
+                System.err.println("Unknown argument: " + arg);
+                success = false;
+            }
+        }
+        return success;
     }
 }

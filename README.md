@@ -6,8 +6,11 @@ This project is forked from [noidsirius/SootTutorial](https://github.com/noidsir
 
 - `./gradlew.bat build`
 ## AvailableExp
-example: `./gradlew.bat run --args="AvailableExp -cp demo/HelloSoot -c FizzBuzz -m available -may_iter 2"`
-explanaition:
+Available Expression Analysis is used as a tool to help developers to eliminate redundant evaluations in their code.
+### example: 
+
+`./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may1 -may_iter 1 -enhanced_may_iter"`
+### arguments:
 
 - `-cp`: classpath
 
@@ -25,18 +28,36 @@ explanaition:
 
     - For our given example, 
 
-        `./gradlew.bat run --args="AvailableExp -cp demo/HelloSoot -c FizzBuzz -m available -may_iter 1"` 
+        `./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may1 -may_iter 1"`
         
         will report:
 
         ```java
-        Units you may optimize in <FizzBuzz: void available()>:
-        line 29: i2 = b0 * b1
+        Units you may optimize in <AvailableExp: void may1()>:
+        demo/AvailableExpression\AvailableExp.java:6             s = a * b;
         ```
 
-        while `./gradlew.bat run --args="AvailableExp -cp demo/HelloSoot -c FizzBuzz -m available -may_iter 0"` will not give any optimization suggestions because it's based on vanilla Available Expression Analysis.
+        while `./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may1"` will not give any optimization suggestions because it's based on vanilla Available Expression Analysis.
 
         In general, more may iterations will give more optimization suggestions, but it will also take more time to run the analysis and the analysis result will be less precise.
+    
+- `-enhanced_may_iter`: If this argument is present, the may iterations the analysis will be enhanced in the following way:
+
+    After each may iteration, an increment global must analysis will be performed. "Increment" means that no available expression will be removed from the result of the may iteration, because otherwise the new available expression found in the may iteration will all be removed. The purpose of the increment global must analysis is to allow successors to inherit the new available expression found in the may iterations.
+
+    This can make may iterations more explainable. One enhanced may iteration can effectively keep an expression alive over a branch statement where it is not always killed.
+
+    For example, 
+    
+    `./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may1fail -may_iter 1"` 
+    
+    would still fail to provide any optimization suggestions. But,
+    
+    `./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may1fail -may_iter 1 -enhanced_may_iter"` 
+    
+    will report the desired suggestion. You may also want to try to analyse `may2()` for more details.
+
+    `./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may2 -may_iter 2 -enhanced_may_iter"`
 # Develop Notes
 ## Setup and run
 - setup requires gradle build
