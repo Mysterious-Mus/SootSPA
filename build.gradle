@@ -68,7 +68,7 @@ test {
 task buildDemoClass(type: Exec) {
     workingDir '.'
     if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-        commandLine 'powershell','-NoProfile','./buildDemo.ps1'
+        commandLine 'powershell','-NoProfile','./demo/compile.ps1'
     }
     else {
         commandLine './buildDemo.sh'
