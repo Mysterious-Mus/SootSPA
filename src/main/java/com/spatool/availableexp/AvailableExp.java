@@ -18,7 +18,7 @@ import com.spatool.utils.WorkList;
 public class AvailableExp {
 
     public static String necessaryArgs[] = {"cp", "c", "m"};
-    public static String optionalArgs[] = {"may_iter", "enhanced_may_iter"};
+    public static String optionalArgs[] = {"may_iter", "enhanced_may_iter", "report_performance", "use_iterative"};
 
     private static class AvailableExpFact implements Iterable<BinopExpr>{
         private Set<BinopExpr> availableExps;
@@ -125,7 +125,7 @@ public class AvailableExp {
             this.method = method;
             this.body = (JimpleBody) method.retrieveActiveBody();
             this.controlFlowGraph = new ClassicCompleteUnitGraph(body);
-            this.workList = new WorkList<Unit>();
+            this.workList = new WorkList<Unit>(args);
             // Initialize the result
             for (Unit u : body.getUnits()) {
                 outFacts.put(u, new AvailableExpFact());
@@ -163,47 +163,72 @@ public class AvailableExp {
         }
 
         /**
+         * propagate the unit, return true if the out fact changed
+         * @param u
+         * @return
+         */
+        public boolean propagateUnit(Unit u) {
+            // Get the in fact of the unit
+            AvailableExpFact inFact = getInFactJoin(u);
+            // in fact refers to all the new available expressions ready to add to the out fact
+            // Get the out fact of the unit
+            // first kill changed expressions
+            if (u instanceof AssignStmt) {
+                AssignStmt assignStmt = (AssignStmt) u;
+                // the variable assigned to
+                Value lhs = assignStmt.getLeftOp();
+                // see if any expression uses the variable in inFact, kill it if so
+                Iterator<BinopExpr> iter = inFact.iterator();
+                while (iter.hasNext()) {
+                    BinopExpr binop = iter.next();
+                    if (binop.getOp1().equivTo(lhs) || binop.getOp2().equivTo(lhs)) {
+                        iter.remove();
+                    }
+                }
+            }
+            // since IR won't assign to a variable used, we can handle generated expressions after kill
+            if (u instanceof AssignStmt) {
+                AssignStmt assignStmt = (AssignStmt) u;
+                // the expression generated
+                Value rhs = assignStmt.getRightOp();
+                if (rhs instanceof BinopExpr) {
+                    BinopExpr binop = (BinopExpr) rhs;
+                    inFact.add(binop);
+                }
+            }
+            // merge the in fact into the out fact
+            AvailableExpFact outFact = outFacts.getFact(u);
+            return outFact.meetInto(inFact);
+        }
+
+        /**
          * finish all the remaining worklist
          * can be called both from outside and from may iter
          */
         public void doAnalysis() {
-            // Do the analysis
-            while (!workList.isEmpty()) {
-                Unit u = workList.remove();
-                // Get the in fact of the unit
-                AvailableExpFact inFact = getInFactJoin(u);
-                // in fact refers to all the new available expressions ready to add to the out fact
-                // Get the out fact of the unit
-                // first kill changed expressions
-                if (u instanceof AssignStmt) {
-                    AssignStmt assignStmt = (AssignStmt) u;
-                    // the variable assigned to
-                    Value lhs = assignStmt.getLeftOp();
-                    // see if any expression uses the variable in inFact, kill it if so
-                    Iterator<BinopExpr> iter = inFact.iterator();
-                    while (iter.hasNext()) {
-                        BinopExpr binop = iter.next();
-                        if (binop.getOp1().equivTo(lhs) || binop.getOp2().equivTo(lhs)) {
-                            iter.remove();
+            if (args.get("use_iterative") == null) {
+                while (!workList.isEmpty()) {
+                    Unit u = workList.remove();
+                    if (propagateUnit(u)) {
+                        // if the out fact changed, add all successors to the worklist
+                        for (Unit v : controlFlowGraph.getSuccsOf(u)) {
+                            workList.add(v);
                         }
                     }
                 }
-                // since IR won't assign to a variable used, we can handle generated expressions after kill
-                if (u instanceof AssignStmt) {
-                    AssignStmt assignStmt = (AssignStmt) u;
-                    // the expression generated
-                    Value rhs = assignStmt.getRightOp();
-                    if (rhs instanceof BinopExpr) {
-                        BinopExpr binop = (BinopExpr) rhs;
-                        inFact.add(binop);
-                    }
-                }
-                // merge the in fact into the out fact
-                AvailableExpFact outFact = outFacts.getFact(u);
-                if (outFact.meetInto(inFact)) {
-                    // if the out fact changed, add all successors to the worklist
-                    for (Unit v : controlFlowGraph.getSuccsOf(u)) {
-                        workList.add(v);
+            }
+            else {
+                if (!workList.isEmpty()) {
+                    workList.clear();
+                    boolean changed = true;
+                    while (changed) {
+                        changed = false;
+                        for (Unit u : body.getUnits()) {
+                            workList.add(u); workList.remove();
+                            if (propagateUnit(u)) {
+                                changed = true;
+                            }
+                        }
                     }
                 }
             }
@@ -291,6 +316,13 @@ public class AvailableExp {
             }
         }
 
+        /** report how many times a unit is handled, i.e. how many times is the worklist polled */
+        public void reportPerformance() {
+            System.out.println("------------------------");
+            System.out.println("Performance Report for " + method.getSignature() + ":");
+            System.out.println("    Unit propagation count: " + workList.getPollCount());
+        }
+
         public void main() {
             doAnalysis();
             if (args.get("may_iter") != null) {
@@ -298,6 +330,9 @@ public class AvailableExp {
             }
             reportResult();
             reportWarnings();
+            if (args.get("report_performance") != null) {
+                reportPerformance();
+            }
         }
     }
 
@@ -321,7 +356,7 @@ public class AvailableExp {
         System.out.println("args: " + Arrays.toString(args));
 
         argMap = ArgParse.parse(args);
-        if (!ArgParse.check(argMap, necessaryArgs, optionalArgs)) {
+        if (argMap == null || !ArgParse.check(argMap, necessaryArgs, optionalArgs)) {
             return;
         }
 

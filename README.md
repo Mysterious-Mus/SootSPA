@@ -9,7 +9,7 @@ This project is forked from [noidsirius/SootTutorial](https://github.com/noidsir
 Available Expression Analysis is used as a tool to help developers to eliminate redundant evaluations in their code.
 ### example: 
 
-`./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may1 -may_iter 1 -enhanced_may_iter"`
+`./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may2 -may_iter 2 -enhanced_may_iter -report_performance"`
 ### arguments:
 
 - `-cp`: classpath
@@ -58,6 +58,9 @@ Available Expression Analysis is used as a tool to help developers to eliminate 
     will report the desired suggestion. You may also want to try to analyse `may2()` for more details.
 
     `./gradlew.bat run --args="AvailableExp -cp demo/AvailableExpression -c AvailableExp -m may2 -may_iter 2 -enhanced_may_iter"`
+
+- `-report_performance`: If this argument is present, the analysis will report its performance, measured by how many times unit propagation is performed.
+- `-use_iterative`: If this argument is present, the analysis will use iterative dataflow analysis instead of worklist algorithm. This can be used to compare the performance of these two algorithms.
 # Develop Notes
 ## Setup and run
 - setup requires gradle build

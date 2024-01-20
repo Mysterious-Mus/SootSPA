@@ -4,7 +4,9 @@ import java.util.*;
 
 public class ArgParse {
     
-    /* generate a map from param name to param value */
+    /** 
+     * generate a map from param name to param value 
+     * return false on failure */
     public static Map<String, String> parse(String[] args) {
         Map<String, String> map = new HashMap<>();
         for (int i = 0; i < args.length; i++) {
@@ -16,6 +18,10 @@ public class ArgParse {
                     i++;
                 }
                 map.put(key, value);
+            }
+            else {
+                System.err.println("Unknown format: " + args[i]);
+                return null;
             }
         }
         return map;
