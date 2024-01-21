@@ -9,7 +9,7 @@ public class AvailableExp {
         }
     }
 
-    // may1 cannot find the Optimizable point, but 'may1+enhanced_may_iter' or may2 is effective
+    // may1 cannot find the Optimizable point, but 'may1+enhanced_may_iter' is effective
     public void may1fail() {
         int S = 0, a = 6, b = 7, s;
         // S = a * b;
